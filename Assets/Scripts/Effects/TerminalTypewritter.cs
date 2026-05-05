@@ -27,6 +27,20 @@ public class TerminalTypewriter : MonoBehaviour
         typingCoroutine = StartCoroutine(AnimateText());
     }
 
+    public void UpdateTextInstant(string newText)
+    {
+        targetText = newText;
+        if (!IsTyping)
+        {
+            textComponent.text = newText;
+            textComponent.maxVisibleCharacters = newText.Length;
+        }
+        else
+        {
+            textComponent.text = newText;
+        }
+    }
+
     private IEnumerator AnimateText()
     {
         IsTyping = true;

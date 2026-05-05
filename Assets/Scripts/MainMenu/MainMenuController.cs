@@ -1,23 +1,239 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using TMPro;
 
 public class MainMenuController : MonoBehaviour
 {
-    // Название сцены, куда переходить при нажатии START
-    // Убедись что оно совпадает с именем в Build Settings!
+    [Header("Scene Settings")]
     public string gameSceneName = "SampleScene";
+
+    [Header("UI Panels")]
+    public GameObject mainButtonsPanel;
+    public GameObject modeSelectPanel;
+
+    [Header("Boot Animation Settings")]
+    public TextMeshProUGUI bootText;
+    public string okColorHex = "#4AF626";
+    public float typingSpeed = 0.02f;
+
+    [Header("Glitch Effect Containers")]
+    public RectTransform textContainer;
+    public RectTransform entireScreenContainer;
+
+    private Vector2 baseTextPos;
+    private Vector3 baseTextScale;
+    private CanvasGroup textCanvasGroup;
+
+    private Vector2 baseScreenPos;
+    private Vector3 baseScreenScale;
+    private CanvasGroup screenCanvasGroup;
+
+    void Start()
+    {
+        if (modeSelectPanel) modeSelectPanel.SetActive(false);
+
+        if (textContainer != null)
+        {
+            baseTextPos = textContainer.anchoredPosition;
+            baseTextScale = textContainer.localScale;
+
+            textCanvasGroup = textContainer.GetComponent<CanvasGroup>();
+            if (textCanvasGroup == null) textCanvasGroup = textContainer.gameObject.AddComponent<CanvasGroup>();
+        }
+
+        if (entireScreenContainer != null)
+        {
+            baseScreenPos = entireScreenContainer.anchoredPosition;
+            baseScreenScale = entireScreenContainer.localScale;
+
+            screenCanvasGroup = entireScreenContainer.GetComponent<CanvasGroup>();
+            if (screenCanvasGroup == null) screenCanvasGroup = entireScreenContainer.gameObject.AddComponent<CanvasGroup>();
+        }
+
+        StartCoroutine(BootSequenceRoutine());
+        StartCoroutine(BackgroundTextGlitchRoutine());
+    }
+
+    private IEnumerator BootSequenceRoutine()
+    {
+        bootText.text = "";
+        yield return new WaitForSeconds(1.0f);
+        yield return StartCoroutine(TypeString("AEGIS OS [v1.4] - BOOT SEQUENCE\n"));
+        yield return new WaitForSeconds(0.4f);
+        yield return StartCoroutine(LoadModule("> SYSTEM_CORE"));
+        yield return StartCoroutine(LoadModule("> RADAR_ARRAY"));
+        yield return StartCoroutine(LoadModule("> COMMS_LINK"));
+        yield return StartCoroutine(LoadModule("> MAIL_CLIENT"));
+        yield return StartCoroutine(LoadModule("> DECRYPT_DIRECTIVES"));
+
+        yield return StartCoroutine(TypeString("> LOADING_MAP_DATA... ["));
+
+        string baseStr = bootText.text;
+        int percent = 0;
+
+        while (percent < 98)
+        {
+            percent += Random.Range(2, 9);
+            if (percent > 98) percent = 98;
+
+            bootText.text = baseStr + percent + "%]";
+            yield return new WaitForSeconds(Random.Range(0.05f, 0.2f));
+        }
+
+        yield return new WaitForSeconds(2.0f);
+
+        bootText.text = baseStr + "100%]\n";
+        yield return new WaitForSeconds(0.4f);
+
+        yield return StartCoroutine(TypeString("> STATUS: "));
+        bootText.text += $"<color={okColorHex}>NOMINAL</color>";
+    }
+
+    private IEnumerator LoadModule(string moduleName)
+    {
+        yield return StartCoroutine(TypeString(moduleName));
+
+        for (int i = 0; i < 3; i++)
+        {
+            yield return new WaitForSeconds(Random.Range(0.2f, 0.4f));
+            bootText.text += ".";
+        }
+
+        yield return new WaitForSeconds(Random.Range(0.4f, 1.0f));
+        bootText.text += $" <color={okColorHex}>OK</color>\n";
+    }
+
+    private IEnumerator TypeString(string textToType)
+    {
+        foreach (char c in textToType)
+        {
+            bootText.text += c;
+            yield return new WaitForSeconds(typingSpeed);
+        }
+    }
+
+    private IEnumerator BackgroundTextGlitchRoutine()
+    {
+        if (textContainer == null) yield break;
+
+        while (true)
+        {
+            yield return new WaitForSeconds(Random.Range(4f, 10f));
+
+            textContainer.anchoredPosition = baseTextPos + new Vector2(Random.Range(-15f, 15f), Random.Range(-5f, 5f));
+            textContainer.localScale = new Vector3(baseTextScale.x * 1.02f, baseTextScale.y * 0.98f, 1f);
+            textCanvasGroup.alpha = Random.Range(0.5f, 0.8f);
+            yield return new WaitForSeconds(Random.Range(0.05f, 0.12f));
+
+            textContainer.anchoredPosition = baseTextPos + new Vector2(Random.Range(-5f, 5f), Random.Range(-15f, 15f));
+            textContainer.localScale = new Vector3(baseTextScale.x * 0.99f, baseTextScale.y * 1.02f, 1f);
+            textCanvasGroup.alpha = Random.Range(0.7f, 1f);
+            yield return new WaitForSeconds(Random.Range(0.03f, 0.08f));
+
+            RestoreTextNormal();
+
+            if (Random.value > 0.7f)
+            {
+                yield return new WaitForSeconds(Random.Range(0.1f, 0.3f));
+
+                textContainer.anchoredPosition = baseTextPos + new Vector2(Random.Range(-10f, 10f), 0);
+                textCanvasGroup.alpha = 0.6f;
+                yield return new WaitForSeconds(0.05f);
+
+                RestoreTextNormal();
+            }
+        }
+    }
+
+    private void RestoreTextNormal()
+    {
+        if (textContainer != null)
+        {
+            textContainer.anchoredPosition = baseTextPos;
+            textContainer.localScale = baseTextScale;
+            if (textCanvasGroup != null) textCanvasGroup.alpha = 1f;
+        }
+    }
+
+    private IEnumerator PanelTransitionGlitch(GameObject hidePanel, GameObject showPanel)
+    {
+        if (entireScreenContainer == null)
+        {
+            hidePanel.SetActive(false);
+            showPanel.SetActive(true);
+            yield break;
+        }
+
+        entireScreenContainer.anchoredPosition = baseScreenPos + new Vector2(Random.Range(-30f, 30f), Random.Range(-15f, 15f));
+        entireScreenContainer.localScale = new Vector3(baseScreenScale.x * 1.08f, baseScreenScale.y * 0.9f, 1f);
+        screenCanvasGroup.alpha = 0.3f;
+        yield return new WaitForSeconds(0.08f);
+
+        hidePanel.SetActive(false);
+        showPanel.SetActive(true);
+
+        entireScreenContainer.anchoredPosition = baseScreenPos + new Vector2(Random.Range(-10f, 10f), Random.Range(-25f, 25f));
+        entireScreenContainer.localScale = new Vector3(baseScreenScale.x * 0.95f, baseScreenScale.y * 1.05f, 1f);
+        screenCanvasGroup.alpha = 0.6f;
+        yield return new WaitForSeconds(0.08f);
+
+        entireScreenContainer.anchoredPosition = baseScreenPos + new Vector2(Random.Range(-5f, 5f), 0);
+        entireScreenContainer.localScale = baseScreenScale;
+        screenCanvasGroup.alpha = 0.8f;
+        yield return new WaitForSeconds(0.05f);
+
+        RestoreScreenNormal();
+    }
+
+    private void RestoreScreenNormal()
+    {
+        if (entireScreenContainer != null)
+        {
+            entireScreenContainer.anchoredPosition = baseScreenPos;
+            entireScreenContainer.localScale = baseScreenScale;
+            if (screenCanvasGroup != null) screenCanvasGroup.alpha = 1f;
+        }
+    }
 
     public void OnStartClicked()
     {
+        StartCoroutine(PanelTransitionGlitch(mainButtonsPanel, modeSelectPanel));
+    }
+
+    public void OnBackClicked()
+    {
+        StartCoroutine(PanelTransitionGlitch(modeSelectPanel, mainButtonsPanel));
+    }
+
+    public void OnStartWithTutorialClicked()
+    {
+        ResetGlobalStatics(); 
+        PlayerPrefs.SetInt("SkipTutorial", 0);
+        PlayerPrefs.Save();
         SceneManager.LoadScene(gameSceneName);
+    }
+
+    public void OnStartSkipTutorialClicked()
+    {
+        ResetGlobalStatics(); 
+        PlayerPrefs.SetInt("SkipTutorial", 1);
+        PlayerPrefs.Save();
+        SceneManager.LoadScene(gameSceneName);
+    }
+
+    private void ResetGlobalStatics()
+    {
+        StoryManager.isFirstGameLoad = true;
+        StoryManager.currentDay = 1;
+        DeskTutorialManager.tutorialWasSkipped = false;
+        DeskTutorialManager.tutorialStep = 0;
+        TutorialManager.isTutorialActive = true;
     }
 
     public void OnExitClicked()
     {
         Application.Quit();
-
-        // Это нужно для тестирования в редакторе —
-        // в билде Application.Quit() сработает сам
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
 #endif

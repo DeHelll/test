@@ -18,16 +18,13 @@ public class DynamicStorm : MonoBehaviour
     private float emptySkyThreshold = 0.45f;
 
     [Header("Настройки опасности")]
-    [Tooltip("Насколько плотным должно быть облако (от 0 до 1), чтобы самолет потерял связь.")]
     [Range(0f, 1f)]
     public float dangerThreshold = 0.51f;
 
-    // СТАТИЧНЫЕ ПЕРЕМЕННЫЕ (Память бури)
     private static bool isSeedGenerated = false;
     private static float globalXOrg;
     private static float globalYOrg;
 
-    // Запоминаем, куда улетел ветер, чтобы ставить его на паузу
     private static float currentWindOffsetX = 0f;
     private static float currentWindOffsetY = 0f;
 
@@ -40,7 +37,6 @@ public class DynamicStorm : MonoBehaviour
     {
         stormImage = GetComponent<RawImage>();
 
-        // Генерируем случайное место для бури только один раз
         if (!isSeedGenerated)
         {
             globalXOrg = Random.value * 100f;
@@ -60,7 +56,6 @@ public class DynamicStorm : MonoBehaviour
     {
         if (stormImage != null)
         {
-            // Двигаем ветер ТОЛЬКО когда радар открыт (Update работает)
             currentWindOffsetX = (currentWindOffsetX + scrollSpeedX * Time.deltaTime) % 1.0f;
             currentWindOffsetY = (currentWindOffsetY + scrollSpeedY * Time.deltaTime) % 1.0f;
 

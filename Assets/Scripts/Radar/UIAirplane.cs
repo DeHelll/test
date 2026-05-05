@@ -145,14 +145,12 @@ public class UIAirplane : MonoBehaviour
             }
             else
             {
-                // ИСПРАВЛЕНИЕ: Если одобрен, но почему-то потерял маршрут — направляем в центр
                 if (waypoints.Count == 0) waypoints.Add(Vector2.zero);
             }
         }
         else
         {
             dispatchStatus = DispatchStatus.Pending;
-            // ИСПРАВЛЕНИЕ: Если самолет потерял маршрут (например, был в ожидании при переходе между сценами)
             if (waypoints.Count == 0) waypoints.Add(Vector2.zero);
         }
 
@@ -259,7 +257,16 @@ public class UIAirplane : MonoBehaviour
 
         if (!isOutOfFuel && dispatchStatus != DispatchStatus.Approved && distanceMoved > 0)
         {
-            currentFuel -= distanceMoved / distancePerFuelUnit;
+            float fuelConsumed = distanceMoved / distancePerFuelUnit;
+            currentFuel -= fuelConsumed;
+            if (cargo == "Fuel" && FlightDataManager.Instance != null)
+            {
+                var flightData = FlightDataManager.Instance.savedFlights.Find(f => f.callsign == realCallsign);
+                if (flightData != null)
+                {
+                    flightData.cargoAmount = Mathf.Max(0, Mathf.RoundToInt(currentFuel));
+                }
+            }
 
             if (currentFuel <= 0)
             {
@@ -568,7 +575,6 @@ public class UIAirplane : MonoBehaviour
         segRect.rotation = Quaternion.Euler(0, 0, (Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) - 90f);
     }
 
-    // ИСПРАВЛЕНИЕ: Бронебойная логика посадки
     public void Approve()
     {
         if (dispatchStatus != DispatchStatus.Pending || isOutOfFuel) return;
@@ -576,13 +582,12 @@ public class UIAirplane : MonoBehaviour
 
         isHolding = false;
 
-        // Если у самолета нет точек или последняя точка НЕ центр — направляем его ровно в центр
         if (waypoints.Count == 0 || waypoints[waypoints.Count - 1] != Vector2.zero)
         {
             waypoints.Add(Vector2.zero);
         }
 
-        UpdateVisualRotation(); // Моментально разворачиваем нос к центру
+        UpdateVisualRotation(); 
         RebuildRouteLayer();
         UpdateHitboxColor();
     }

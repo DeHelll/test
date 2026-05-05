@@ -10,13 +10,17 @@ public class TVTutorialManager : MonoBehaviour
     [Header("UI References")]
     public GameObject subtitlePanel;
     public TextMeshProUGUI subtitleText;
+
+    [Header("OS Interactions")]
+    public Button desktopMailIcon;
+    public Button desktopRadarIcon;
+
+    [Header("AirTraffic App References")]
     public Button returnButton;
     public Button allowButton;
     public Button denyButton;
-
-    [Header("Tab Buttons")]
     public Button resourcesTabButton;
-    public Button backToFlightsButton; 
+    public Button backToFlightsButton;
 
     [Header("Mentor Settings")]
     public Color mentorNormalColor = Color.green;
@@ -27,14 +31,20 @@ public class TVTutorialManager : MonoBehaviour
     private bool skipRequested = false;
     public static bool isTvTutorialCompleted = false;
 
+    private bool hasOpenedMail = false;
+    private bool hasOpenedRadarApp = false;
+    private bool hasOpenedResources = false;
+    private bool hasReturnedToFlights = false;
+
     private bool isTargetDenied = false;
     private bool isTargetAllowedByMistake = false;
     private string targetCallsign = "KO-677";
 
-    private bool hasOpenedResources = false;
-    private bool hasReturnedToFlights = false;
+    private string msgOsIntro = "Welcome to Aegis OS. This terminal is the brain of our operations.";
+    private string msgOpenMail = "You have a new unread message. Click the 'Inbox' icon to read today's directives.";
+    private string msgReadMail = "Good. Directives dictate who we can accept and who we must turn away. Ignoring them leads to... severe consequences.";
+    private string msgOpenApp = "Now close the Inbox and launch 'ATC_Sys.exe' to manage the incoming flights.";
 
-    private string msgIntro = "Welcome to the Dispatch Terminal. Here you make the final call on every flight.";
     private string msgLock = "Listen carefully: once you press [ALLOW] or [DENY], the plane's route is LOCKED. You can NO LONGER change its path on the radar.";
     private string msgDetails = "On the right, you can see the flight's CARGO. At the bottom is your CAPACITY. You can only land 5 planes at a time.";
     private string msgGoToRes = "Let's look at ground ops. Click the 'Resources' tab at the bottom to continue.";
@@ -45,8 +55,8 @@ public class TVTutorialManager : MonoBehaviour
     private string msgGoBack = "Understood? Now click 'Back' to go back to the main flight list.";
 
     private string msgTask = "Time for your first test. Find the flight with the 'KO' prefix. Select it and press DENY. We don't accept them.";
-    private string msgSuccess = "Excellent work. Now hit 'Return' at the bottom left and go back to the Radar.";
-    private string msgFail = "<size=120%>WHAT ARE YOU DOING?!</size>\n'KO' flights are prohibited! You put us at risk! Go back to the Radar immediately!";
+    private string msgSuccess = "Excellent work. Now hit 'Shut Down' at the bottom left and go back to the physical Radar.";
+    private string msgFail = "Incorrect. I specifically told you to DENY the 'KO' prefix. Pay attention! Now go back to the Radar.";
 
     private Vector2 originalTextPos;
 
@@ -56,6 +66,12 @@ public class TVTutorialManager : MonoBehaviour
     {
         if (subtitleText != null)
             originalTextPos = subtitleText.rectTransform.anchoredPosition;
+
+        if (desktopMailIcon != null)
+            desktopMailIcon.onClick.AddListener(() => { hasOpenedMail = true; });
+
+        if (desktopRadarIcon != null)
+            desktopRadarIcon.onClick.AddListener(() => { hasOpenedRadarApp = true; });
 
         if (resourcesTabButton != null)
             resourcesTabButton.onClick.AddListener(() => { hasOpenedResources = true; });
@@ -69,6 +85,7 @@ public class TVTutorialManager : MonoBehaviour
             return;
         }
 
+        if (desktopRadarIcon != null) desktopRadarIcon.interactable = false;
         if (returnButton != null) returnButton.interactable = false;
         if (allowButton != null) allowButton.interactable = false;
         if (denyButton != null) denyButton.interactable = false;
@@ -85,8 +102,30 @@ public class TVTutorialManager : MonoBehaviour
         subtitlePanel.SetActive(true);
         subtitleText.color = mentorNormalColor;
 
-        yield return StartCoroutine(TypeText(msgIntro, false));
+        yield return StartCoroutine(TypeText(msgOsIntro, false));
         yield return new WaitUntil(() => skipRequested);
+
+        yield return StartCoroutine(TypeText(msgOpenMail, false));
+        skipRequested = false;
+        yield return new WaitUntil(() => hasOpenedMail);
+        subtitlePanel.SetActive(false);
+
+        yield return new WaitForSecondsRealtime(0.5f);
+
+        subtitlePanel.SetActive(true);
+        yield return StartCoroutine(TypeText(msgReadMail, false));
+        yield return new WaitUntil(() => skipRequested);
+
+        if (desktopRadarIcon != null) desktopRadarIcon.interactable = true;
+
+        yield return StartCoroutine(TypeText(msgOpenApp, false));
+        skipRequested = false;
+        yield return new WaitUntil(() => hasOpenedRadarApp);
+        subtitlePanel.SetActive(false);
+
+        yield return new WaitForSecondsRealtime(0.5f);
+
+        subtitlePanel.SetActive(true);
         yield return StartCoroutine(TypeText(msgLock, false));
         yield return new WaitUntil(() => skipRequested);
         yield return StartCoroutine(TypeText(msgGoToRes, false));
@@ -155,6 +194,7 @@ public class TVTutorialManager : MonoBehaviour
         if (denyButton != null) denyButton.interactable = true;
 
         isTvTutorialCompleted = true;
+
         DeskTutorialManager.tutorialStep = 4;
     }
 

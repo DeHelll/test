@@ -29,26 +29,35 @@ public class RadarTutorialManager : MonoBehaviour
     private bool isEmergencyMessageActive = false;
     public static bool isRadarTutorialCompleted = false;
 
+    // --- Флаг для погодного фильтра ---
+    private bool isWeatherFilterToggled = false;
+
     private string msgIntro = "Welcome to the Radar screen. This is your main tool for managing the airspace.";
     private string msgPlanesSpawned = "Attention! Two flights have just entered your sector. Do you see them?";
     private string msgZoomTutorial = "It's hard to read their data from this height. Zoom in until you can see their callsigns.";
 
-    private string msgStep1 = "Good. now click a plane to SELECT it and reveal its flight path. Click again to DESELECT.";
+    private string msgStep1 = "Good. Now click a plane to SELECT it and reveal its flight path. Click again to DESELECT.";
+    private string msgFuelTutorial = "Notice the GREEN LINE on the path? That is the fuel limit. Make sure the plane doesn't fly past this green line, or it will crash!";
+
     private string msgStep2 = "Click anywhere on the radar to create a WAYPOINT. And most importantly, if flight paths cross, planes will COLLIDE!";
     private string msgStep3 = "Need to fix a route? Click an existing waypoint to REMOVE it.";
+
+    // --- НОВОЕ: Тексты для погодного фильтра ---
+    private string msgWeather1 = "One more thing. Severe storms can completely prevent communication with the aircraft.";
+    private string msgWeather2 = "Find the WEATHER FILTER button and click it to toggle cloud visibility.";
 
     private string msgDanger = "Stop messing around! Icons turned ORANGE! A collision is imminent!";
     private string msgEmergency = "You have seconds to act! Divert one of the planes NOW!";
     private string msgSuccess = "Crisis averted. Safe distance maintained.";
     private string msgProactiveSuccess = "Excellent foresight, Dispatcher. You diverted them early. Good job.";
 
-    private string msgFinalStep1 = "A new flight appeared. SELECT it and check the terminal on the left.";
-    private string msgFinalStep2 = "Status is 'PENDING', prefix is 'KO'. Remember the rules in your book?";
-    private string msgFinalStep3 = "'KO' flights are strictly FORBIDDEN today. They cannot land.";
-    private string msgFinalTask = "Click 'Return', go back to your desk, and DENY their entry.";
+    private string msgFinalStep1 = "A new flight appeared. SELECT it to check its details.";
+    private string msgFinalStep2 = "Its prefix is 'KO'. For the purpose of this training, you must turn this plane away.";
+    private string msgFinalStep3 = "You need to learn how to reject a flight. They cannot land here.";
+    private string msgFinalTask = "Click 'Return', open the terminal on your desk, and DENY their entry.";
 
     private string[] angryResponses = {
-        "<size=120%>WHAT HAVE YOU DONE?!</size>\nYou just let two planes collide! This is gross negligence!",
+        "<size=120%>WHAT HAVE YOU DONE?</size>\nYou just let two planes collide! This is gross negligence!",
         "<size=120%>DISASTER!</size>\nYou were supposed to separate them, not help them meet in mid-air!"
     };
 
@@ -79,6 +88,11 @@ public class RadarTutorialManager : MonoBehaviour
         {
             StartCoroutine(RadarTutorialSequence());
         }
+    }
+
+    public void PlayerToggledWeatherFilter()
+    {
+        isWeatherFilterToggled = true;
     }
 
     public void NotifyEmergencyCollision()
@@ -130,12 +144,24 @@ public class RadarTutorialManager : MonoBehaviour
         yield return StartCoroutine(TypeText(msgStep1, false));
         skipRequested = false;
         yield return new WaitUntil(() => skipRequested);
+
+        yield return StartCoroutine(TypeText(msgFuelTutorial, false));
+        skipRequested = false;
+        yield return new WaitUntil(() => skipRequested);
+
         yield return StartCoroutine(TypeText(msgStep2, false));
         skipRequested = false;
         yield return new WaitUntil(() => skipRequested);
         yield return StartCoroutine(TypeText(msgStep3, false));
         skipRequested = false;
         yield return new WaitUntil(() => skipRequested);
+
+        yield return StartCoroutine(TypeText(msgWeather1, false));
+        skipRequested = false;
+        yield return new WaitUntil(() => skipRequested);
+
+        yield return StartCoroutine(TypeText(msgWeather2, false));
+        yield return new WaitUntil(() => isWeatherFilterToggled);
 
         subtitlePanel.SetActive(false);
         Time.timeScale = 1f;
@@ -147,7 +173,7 @@ public class RadarTutorialManager : MonoBehaviour
         {
             List<UIAirplane> currentPlanes = GetActiveTutorialPlanes();
 
-            if (currentPlanes.Count < 2) break; 
+            if (currentPlanes.Count < 2) break;
 
             float dist = Vector2.Distance(currentPlanes[0].GetLogicalPosition(), currentPlanes[1].GetLogicalPosition());
 
@@ -276,37 +302,28 @@ public class RadarTutorialManager : MonoBehaviour
         skipRequested = false;
         yield return new WaitUntil(() => skipRequested);
 
-        if (didFirstPlanesCrash)
-        {
-            subtitleText.color = mentorAngryColor;
-            yield return StartCoroutine(TypeText("Since YOU crashed the first ones, I have ordered a new flight to approach. Watch it closely.", false));
-            skipRequested = false;
-            yield return new WaitUntil(() => skipRequested);
-
-            if (TutorialManager.Instance != null)
-            {
-                TutorialManager.Instance.SpawnSpecificPlane(
-                    new Vector2(-600, -600),
-                    Vector2.zero,
-                    "LX-677",
-                    radarContentTransform
-                );
-            }
-        }
-
         subtitleText.color = mentorNormalColor;
         yield return StartCoroutine(TypeText("They circle until you ALLOW or DENY them. If fuel runs out, they divert.", false));
         skipRequested = false;
         yield return new WaitUntil(() => skipRequested);
 
-        yield return StartCoroutine(TypeText("Your training is officially over. From here on out, you're on your own. Good luck.", false));
+        yield return StartCoroutine(TypeText("Your training is officially over. Hit 'Return' to go back to your desk and start your shift.", false));
+
         if (returnButton != null) returnButton.interactable = true;
-        skipRequested = false;
-        yield return new WaitUntil(() => skipRequested);
+
+        bool hasReturned = false;
+        if (returnButton != null)
+        {
+            returnButton.onClick.AddListener(() => { hasReturned = true; });
+        }
+
+        yield return new WaitUntil(() => hasReturned);
 
         subtitlePanel.SetActive(false);
         Time.timeScale = 1f;
         isRadarTutorialCompleted = true;
+
+        PlayerPrefs.SetInt("StartDayNumber", 1);
     }
 
     List<UIAirplane> GetActiveTutorialPlanes()

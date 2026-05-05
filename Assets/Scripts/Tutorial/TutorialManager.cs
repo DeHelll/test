@@ -18,6 +18,27 @@ public class TutorialManager : MonoBehaviour
     void Awake()
     {
         Instance = this;
+
+        // Проверяем, нажимал ли игрок пропуск или началась ли уже смена
+        bool isSkipped = PlayerPrefs.GetInt("SkipTutorial", 0) == 1;
+
+        if (isSkipped || DeskTutorialManager.tutorialWasSkipped || PlayerPrefs.HasKey("StartDayNumber") || StoryManager.currentDay > 1)
+        {
+            isTutorialActive = false;
+        }
+        else
+        {
+            // Включаем туториал ТОЛЬКО если это реальный старт с обучением
+            tutorialStep = 0;
+            stepTimer = 0f;
+            isTutorialActive = true;
+        }
+    }
+
+    public void StopTutorial()
+    {
+        isTutorialActive = false;
+        Debug.Log("<color=yellow>[TutorialManager]</color> Обучающий спавнер навсегда отключен.");
     }
 
     void Update()
@@ -47,7 +68,7 @@ public class TutorialManager : MonoBehaviour
                 SpawnSpecificPlane(new Vector2(800, 0), Vector2.zero, tutorialCallsigns[2], currentRadarContent);
                 Debug.Log($"[Tutorial] KO-677 spawned. Player must Deny its entry.");
                 tutorialStep = 2;
-                isTutorialActive = false;
+                isTutorialActive = false; // Сам себя выключает после конца
             }
         }
     }

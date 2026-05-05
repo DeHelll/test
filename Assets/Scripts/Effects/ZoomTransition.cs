@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.Events;
-using UnityEngine.Rendering.Universal; 
+using UnityEngine.Rendering.Universal;
 
 public class ZoomTransition : MonoBehaviour, IPointerClickHandler
 {
@@ -31,6 +31,11 @@ public class ZoomTransition : MonoBehaviour, IPointerClickHandler
 
         onZoomStart?.Invoke();
 
+        // --- НОВОЕ: Запоминаем имя предмета, в который мы зумимся ---
+        Transform targetTransform = zoomTarget != null ? zoomTarget : transform;
+        ZoomReturnManager.pendingReturnTargetName = targetTransform.name;
+        // -------------------------------------------------------------
+
         AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(sceneToLoad);
         asyncLoad.allowSceneActivation = false;
 
@@ -38,7 +43,6 @@ public class ZoomTransition : MonoBehaviour, IPointerClickHandler
         Vector3 targetScale = startScale * zoomMultiplier;
         Vector2 startPos = rootContainer.anchoredPosition;
 
-        Transform targetTransform = zoomTarget != null ? zoomTarget : transform;
         Vector3 localTargetPos3D = rootContainer.InverseTransformPoint(targetTransform.position);
         Vector2 localTargetPos = new Vector2(localTargetPos3D.x, localTargetPos3D.y);
         Vector2 targetPos = startPos - (localTargetPos * (targetScale.x - startScale.x));

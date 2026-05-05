@@ -38,6 +38,9 @@ public class TVDisplayInfo : MonoBehaviour
     public Color denyPressedColor = new Color(0.9f, 0.1f, 0.1f, 1f);
     public Color disabledColor = new Color(0.15f, 0.15f, 0.15f, 0.6f);
 
+    [Header("Shift Management")]
+    public Button endShiftButton;
+
     private int selectedIndex = -1;
 
     private const string COL_HEADER = "#00FF41";
@@ -64,6 +67,8 @@ public class TVDisplayInfo : MonoBehaviour
 
     void Start()
     {
+        if (endShiftButton != null) endShiftButton.onClick.AddListener(OnEndShiftClicked);
+
         if (approveButton != null) approveButton.onClick.AddListener(OnApproveClicked);
         if (denyButton != null) denyButton.onClick.AddListener(OnDenyClicked);
 
@@ -260,7 +265,7 @@ public class TVDisplayInfo : MonoBehaviour
                                 }
                                 else if (!flight.isRefueled)
                                 {
-                                    int neededFuel = flight.planeMaxFuel - flight.currentFuel;
+                                    int neededFuel = flight.planeMaxFuel - Mathf.RoundToInt(flight.currentFuel);
                                     if (fdm.totalFuel > 0)
                                     {
                                         leftInfo += $"    <link=\"REFUEL_{flight.callsign}\"><color=#00BFFF><b>[ START REFUELING ({neededFuel}L) ]</b></color></link>\n";
@@ -355,6 +360,14 @@ public class TVDisplayInfo : MonoBehaviour
 
         baseStatsText.text = $"<color=white>CAPACITY:</color> <color={capCol}><b>{fdm.landedPlanes} / {fdm.maxPlanes}</b></color>\n" +
                              $"<color=#FFD700>MED: {fdm.totalMedicines} | PPL: {fdm.totalPeople} | FOOD: {fdm.totalFood} | FUEL: {fdm.totalFuel}</color>";
+
+        if (endShiftButton != null && RadarManager.Instance != null)
+        {
+            bool isFull = fdm.landedPlanes >= fdm.maxPlanes;
+            bool noPlanesOnRadar = RadarManager.Instance.GetPlanesCount() == 0;
+
+            endShiftButton.interactable = (isFull && noPlanesOnRadar);
+        }
     }
 
     void DisplayFlights()
@@ -399,8 +412,13 @@ public class TVDisplayInfo : MonoBehaviour
                 }
                 else
                 {
-                    string stCol = data.status == "APPROACHING" ? COL_APPROACH : COL_TRANSIT;
-                    string stIcon = data.status == "APPROACHING" ? "↓ LAND" : "→ XSIT";
+                    // ИСПРАВЛЕНО: Проверяем транзит по targetPosition
+                    bool isTransit = data.targetPosition != Vector2.zero;
+                    string currentStatus = isTransit ? "TRANSIT" : "APPROACHING";
+
+                    string stCol = currentStatus == "APPROACHING" ? COL_APPROACH : COL_TRANSIT;
+                    string stIcon = currentStatus == "APPROACHING" ? "↓ LAND" : "→ XSIT";
+
                     txt.text = $"<color={COL_CALLSIGN}><b>{data.callsign}</b></color>  " +
                                $"<color={stCol}>{stIcon}</color>  " +
                                $"<color={COL_SPEED}>SPD:{data.speed:F0}</color>";
@@ -515,26 +533,39 @@ public class TVDisplayInfo : MonoBehaviour
         string callsign = flights[index].callsign;
         var data = flights[index];
 
+        // ИСПРАВЛЕНО: Проверяем транзит по targetPosition
+        bool isTransit = data.targetPosition != Vector2.zero;
+        string currentStatus = isTransit ? "TRANSIT" : "APPROACHING";
+
         if (selectedLabel != null)
         {
-            string stCol = flights[index].status == "APPROACHING" ? COL_APPROACH : COL_TRANSIT;
+            string stCol = currentStatus == "APPROACHING" ? COL_APPROACH : COL_TRANSIT;
             selectedLabel.text = $"<color={COL_HEADER}>SELECTED ►</color> " +
                                  $"<color={COL_SELECTED}><b>{callsign}</b></color>  " +
-                                 $"<color={stCol}>{flights[index].status}</color>";
+                                 $"<color={stCol}>{currentStatus}</color>";
         }
 
         if (detailedInfoText != null)
         {
-            string cargoUnit = "";
-            if (data.cargo == "Medicines") cargoUnit = " BOX";
-            else if (data.cargo == "Food") cargoUnit = " KG";
-            else if (data.cargo == "Fuel") cargoUnit = " L";
-
             string infoString = $"<color=white><b>FLIGHT DETAILS:</b>\n\n</color>";
             infoString += $"Callsign: <b>{callsign}</b>\n";
-            infoString += $"Status: {data.status}\n";
+            infoString += $"Status: {currentStatus}\n";
             infoString += $"Speed: {data.speed:F0}\n";
-            infoString += $"Cargo: <color=#FFD700><b>{data.cargo} ({data.cargoAmount}{cargoUnit})</b></color>\n";
+
+            if (!data.isCargoKnown)
+            {
+                infoString += $"Cargo: <color=#FF0000><b>UNKNOWN</b></color>\n";
+            }
+            else
+            {
+                string cargoUnit = "";
+                if (data.cargo == "Medicines") cargoUnit = " BOX";
+                else if (data.cargo == "Food") cargoUnit = " KG";
+                else if (data.cargo == "Fuel") cargoUnit = " L";
+                else if (data.cargo == "People") cargoUnit = " PPL";
+
+                infoString += $"Cargo: <color=#FFD700><b>{data.cargo} ({data.cargoAmount}{cargoUnit})</b></color>\n";
+            }
 
             detailedInfoText.text = infoString;
         }
@@ -548,13 +579,22 @@ public class TVDisplayInfo : MonoBehaviour
         bool canDecide = selectedIndex >= 0;
 
         bool hasSpace = true;
+        bool isTransit = false;
+
         if (FlightDataManager.Instance != null)
         {
             hasSpace = FlightDataManager.Instance.landedPlanes < FlightDataManager.Instance.maxPlanes;
+
+            if (canDecide && selectedIndex < FlightDataManager.Instance.savedFlights.Count)
+            {
+                // Проверяем, транзитный ли это самолет
+                isTransit = FlightDataManager.Instance.savedFlights[selectedIndex].targetPosition != Vector2.zero;
+            }
         }
 
-        bool canApprove = canDecide && hasSpace;
-        bool canDeny = canDecide;
+        // Блокируем кнопки, если самолет транзитный
+        bool canApprove = canDecide && hasSpace && !isTransit;
+        bool canDeny = canDecide && !isTransit;
 
         if (canDecide && TVTutorialManager.Instance != null && !TVTutorialManager.isTvTutorialCompleted)
         {
@@ -589,7 +629,14 @@ public class TVDisplayInfo : MonoBehaviour
         }
 
         if (!canDecide && selectedLabel != null)
+        {
             selectedLabel.text = $"<color={COL_SEPARATOR}>► SELECT FLIGHT FROM LIST</color>";
+        }
+        else if (isTransit && selectedLabel != null && !selectedLabel.text.Contains("TRANSIT FLIGHT"))
+        {
+            // Подсказка, почему кнопки заблокированы
+            selectedLabel.text += "  <color=#00BFFF>[ TRANSIT FLIGHT ]</color>";
+        }
     }
 
     void OnApproveClicked()
@@ -641,5 +688,13 @@ public class TVDisplayInfo : MonoBehaviour
         yield return new WaitForSeconds(delay);
         if (!hiddenFlights.Contains(callsign)) hiddenFlights.Add(callsign);
         DisplayFlights();
+    }
+
+    void OnEndShiftClicked()
+    {
+        if (StoryManager.Instance != null)
+        {
+            StoryManager.Instance.EndCurrentShift();
+        }
     }
 }

@@ -18,7 +18,7 @@ public class DeskTutorialManager : MonoBehaviour
     public GameObject tvHighlight;
 
     [Header("Tutorial Lights")]
-    public GameObject[] radioLights; 
+    public GameObject[] radioLights;
     public GameObject radarLight;
     public GameObject tvLight;
 
@@ -38,23 +38,43 @@ public class DeskTutorialManager : MonoBehaviour
     private bool isRadarClicked = false;
     private bool isTvClicked = false;
     private bool skipRequested = false;
-    public static int tutorialStep = 1;
+
+    public static int tutorialStep = 0;
+
+    public static bool tutorialWasSkipped = false;
 
     private string msg1 = "Click on the radio to listen to the incoming message.";
     private string msg2 = "Welcome to your first shift, Dispatcher! Let me show you around your new workplace!";
-    private string msg3 = "The manual and mandatory requirements for today's shift are in the book located to the left of the radio.\nOpen it to review today's tasks.";
-    private string msg4 = "Excellent. Now it's time to manage the airspace.\nClick on the Radar monitor to open it.";
-    private string msg5 = "On the left, you'll see the terminal. It plays a key role in your work: basically, it's a powerful tool for managing landing clearances, resources, and aircraft at your airport. Now open the terminal, and I'll explain in detail how it works.";
+    private string msgBook = "See that book on the desk? It's your manual. It contains descriptions of all equipment and daily rules. Open it to take a quick look.";
+    private string msgRadar = "Excellent. Now it's time to manage the airspace.\nClick on the Radar monitor to open it.";
+    private string msgTV = "On the left, you'll see the terminal. It plays a key role in your work: basically, it's a powerful tool for managing landing clearances, resources, and aircraft. Open it now.";
 
     void Awake()
     {
         Instance = this;
-        if (disableTutorialsForTesting)
+
+        bool skipFromMenu = PlayerPrefs.GetInt("SkipTutorial", 0) == 1;
+
+        if (disableTutorialsForTesting || skipFromMenu || tutorialWasSkipped)
         {
             tutorialStep = 99;
             RadarTutorialManager.isRadarTutorialCompleted = true;
             TVTutorialManager.isTvTutorialCompleted = true;
+
+            TutorialManager.isTutorialActive = false;
+
+            if (skipFromMenu && !tutorialWasSkipped)
+            {
+                PlayerPrefs.SetInt("StartDayNumber", 1);
+                tutorialWasSkipped = true;
+                PlayerPrefs.DeleteKey("SkipTutorial");
+            }
         }
+        else if (!PlayerPrefs.HasKey("SkipTutorial") && tutorialStep == 0)
+        {
+            PlayerPrefs.DeleteKey("SkipTutorial");
+        }
+
 #if !UNITY_EDITOR
         disableTutorialsForTesting = false;
 #endif
@@ -107,18 +127,11 @@ public class DeskTutorialManager : MonoBehaviour
         Time.timeScale = 0f;
 
         if (radioHighlight) radioHighlight.SetActive(true);
-        SetRadioLights(true); 
+        SetRadioLights(true);
         if (radioButton) radioButton.interactable = true;
 
         subtitlePanel.SetActive(true);
         yield return StartCoroutine(TypeText(msg1));
-        yield return new WaitUntil(() => isRadioClicked);
-
-        if (radioHighlight) radioHighlight.SetActive(false);
-        SetRadioLights(false); 
-        if (radioButton) radioButton.interactable = false;
-        subtitleText.text = "";
-
         yield return new WaitUntil(() => isRadioClicked);
 
         if (radioHighlight) radioHighlight.SetActive(false);
@@ -130,14 +143,7 @@ public class DeskTutorialManager : MonoBehaviour
         skipRequested = false;
         yield return new WaitUntil(() => skipRequested);
 
-        subtitlePanel.SetActive(false);
-        yield return new WaitForSecondsRealtime(0.5f);
-
-        subtitlePanel.SetActive(true);
-        yield return StartCoroutine(TypeText(msg3));
-
-        skipRequested = false;
-        yield return new WaitUntil(() => skipRequested);
+        yield return StartCoroutine(TypeText(msgBook));
 
         if (bookTransition) bookTransition.canClick = true;
         if (bookHighlight) bookHighlight.SetActive(true);
@@ -152,14 +158,14 @@ public class DeskTutorialManager : MonoBehaviour
         Time.timeScale = 0f;
 
         subtitlePanel.SetActive(true);
-        yield return StartCoroutine(TypeText(msg4));
+        yield return StartCoroutine(TypeText(msgRadar));
 
         skipRequested = false;
         yield return new WaitUntil(() => skipRequested);
 
         if (radarTransition) radarTransition.canClick = true;
         if (radarHighlight) radarHighlight.SetActive(true);
-        if (radarLight) radarLight.SetActive(true); 
+        if (radarLight) radarLight.SetActive(true);
 
         yield return new WaitUntil(() => isRadarClicked);
     }
@@ -171,14 +177,14 @@ public class DeskTutorialManager : MonoBehaviour
         Time.timeScale = 0f;
 
         subtitlePanel.SetActive(true);
-        yield return StartCoroutine(TypeText(msg5));
+        yield return StartCoroutine(TypeText(msgTV));
 
         skipRequested = false;
         yield return new WaitUntil(() => skipRequested);
 
         if (tvTransition) tvTransition.canClick = true;
         if (tvHighlight) tvHighlight.SetActive(true);
-        if (tvLight) tvLight.SetActive(true); 
+        if (tvLight) tvLight.SetActive(true);
 
         yield return new WaitUntil(() => isTvClicked);
     }
@@ -197,7 +203,7 @@ public class DeskTutorialManager : MonoBehaviour
 
         if (radarTransition) radarTransition.canClick = true;
         if (radarHighlight) radarHighlight.SetActive(true);
-        if (radarLight) radarLight.SetActive(true); 
+        if (radarLight) radarLight.SetActive(true);
 
         yield return new WaitUntil(() => isRadarClicked);
     }
@@ -214,13 +220,16 @@ public class DeskTutorialManager : MonoBehaviour
         Time.timeScale = 1f;
         subtitlePanel.SetActive(false);
 
+        if (bookHighlight) bookHighlight.SetActive(false);
     }
 
     public void PlayerClickedRadar()
     {
         isRadarClicked = true;
+
         if (tutorialStep == 1) tutorialStep = 2;
         else if (tutorialStep == 4) tutorialStep = 5;
+
         Time.timeScale = 1f;
         subtitlePanel.SetActive(false);
 

@@ -1,134 +1,145 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 public class AirplaneSpawner : MonoBehaviour
 {
+    public static AirplaneSpawner Instance;
+
     [Header("Settings")]
     public GameObject airplanePrefab;
     public Transform radarContent;
     public int maxAirplanes = 5;
-    public bool disableRandomSpawns = false;
 
-    public float minSpawnTime = 3f;
-    public float maxSpawnTime = 8f;
-    public float spawnRadius = 400f;
+    public float minSpawnTime = 5f;
+    public float maxSpawnTime = 12f;
+    public float spawnRadius = 1300f;
 
     [Range(0f, 1f)]
     public float landingProbability = 0.5f;
 
-    [Header("Safety Settings")]
-    public float minSpawnGap = 150f;
-    public int spawnAttempts = 10;  
-
-    private float timer;
-
-    void Start()
+    void Awake()
     {
-        SetRandomTimer();
+        Instance = this;
     }
 
     void Update()
     {
-        if (disableRandomSpawns) return;
+        if (FlightDataManager.Instance == null || !FlightDataManager.Instance.isShiftActive) return;
 
-        timer -= Time.deltaTime;
-        if (timer <= 0)
+        if (FlightDataManager.Instance.landedPlanes >= FlightDataManager.Instance.maxPlanes) return;
+
+        FlightDataManager.Instance.globalSpawnTimer -= Time.deltaTime;
+
+        if (FlightDataManager.Instance.globalSpawnTimer <= 0)
         {
-            int currentCount = GetCurrentPlanesCount();
+            Transform currentContent = GetActiveRadarContent();
+            if (currentContent == null) return;
 
+            int currentCount = GetCurrentPlanesCount(currentContent);
+
+            // Если на радаре есть место для нового самолета
             if (currentCount < maxAirplanes)
             {
-                SpawnAirplane();
-            }
-            SetRandomTimer();
-        }
-    }
-
-    int GetCurrentPlanesCount()
-    {
-        if (RadarManager.Instance != null)
-        {
-            return RadarManager.Instance.GetPlanesCount();
-        }
-        else
-        {
-            if (radarContent != null)
-            {
-                return radarContent.GetComponentsInChildren<UIAirplane>().Length;
-            }
-            return 0;
-        }
-    }
-
-    void SetRandomTimer()
-    {
-        timer = Random.Range(minSpawnTime, maxSpawnTime);
-    }
-
-    void SpawnAirplane()
-    {
-        Vector2 startPos = Vector2.zero;
-        Vector2 targetPos = Vector2.zero;
-        bool positionFound = false;
-
-        for (int i = 0; i < spawnAttempts; i++)
-        {
-            float startAngle = Random.Range(0f, 360f) * Mathf.Deg2Rad;
-            startPos = new Vector2(Mathf.Cos(startAngle), Mathf.Sin(startAngle)) * spawnRadius;
-
-            if (IsPositionSafe(startPos))
-            {
-                positionFound = true;
-
-                if (Random.value < landingProbability)
+                // Если в очереди есть СЮЖЕТНЫЙ самолет
+                if (FlightDataManager.Instance.scriptedFlightsQueue.Count > 0)
                 {
-                    targetPos = Vector2.zero;
+                    // Достаем самолет и таймер до следующего
+                    FlightData data = FlightDataManager.Instance.scriptedFlightsQueue.Dequeue();
+
+                    float nextDelay = 5f; // Страховочное значение
+                    if (FlightDataManager.Instance.scriptedDelaysQueue.Count > 0)
+                    {
+                        nextDelay = FlightDataManager.Instance.scriptedDelaysQueue.Dequeue();
+                    }
+
+                    SpawnStoryPlane(data, currentContent);
+
+                    // Устанавливаем долгую задержку из сценария
+                    FlightDataManager.Instance.globalSpawnTimer = nextDelay;
                 }
+                // Иначе — спавним ОБЫЧНЫЙ рандомный самолет
                 else
                 {
-                    float endAngle = startAngle + Random.Range(120f, 240f) * Mathf.Deg2Rad;
-                    targetPos = new Vector2(Mathf.Cos(endAngle), Mathf.Sin(endAngle)) * (spawnRadius + 200f);
+                    SpawnRandomAirplane(currentContent);
+                    FlightDataManager.Instance.globalSpawnTimer = Random.Range(minSpawnTime, maxSpawnTime);
                 }
-                break; 
             }
-        }
-
-        if (positionFound)
-        {
-            GameObject newPlane = Instantiate(airplanePrefab, radarContent, false);
-            UIAirplane planeScript = newPlane.GetComponent<UIAirplane>();
-
-            if (planeScript != null)
+            else
             {
-                planeScript.SetFlightPath(startPos, targetPos);
-
-                if (RadarManager.Instance != null)
-                {
-                    RadarManager.Instance.RegisterAirplane(planeScript);
-                }
+                // Если мест на радаре нет (уже кружат 5 бортов), спавнер ждет 3 секунды и пробует снова,
+                // НЕ сбрасывая долгий таймер (чтобы не сломать сюжет).
+                FlightDataManager.Instance.globalSpawnTimer = 3f;
             }
-        }
-        else
-        {
-            Debug.LogWarning("[AirplaneSpawner] �� ������� ����� ���������� ����� ��� ������!");
         }
     }
 
-    bool IsPositionSafe(Vector2 potentialPos)
+    void SpawnStoryPlane(FlightData data, Transform contentParent)
     {
-        UIAirplane[] existingPlanes = radarContent.GetComponentsInChildren<UIAirplane>();
+        // 1. Берем ЖЕСТКИЕ заскриптованные позиции из FlightData (ИСПРАВЛЕНО: targetPosition)
+        Vector2 startPos = data.position;
+        Vector2 targetPos = data.targetPosition;
 
-        foreach (UIAirplane plane in existingPlanes)
+        GameObject newPlane = Instantiate(airplanePrefab, contentParent, false);
+        UIAirplane planeScript = newPlane.GetComponent<UIAirplane>();
+
+        if (planeScript != null)
         {
-            if (plane == null) continue;
+            planeScript.InitializeFromData(data);
+            planeScript.SetFlightPath(startPos, targetPos);
 
-            float distance = Vector2.Distance(potentialPos, plane.GetComponent<RectTransform>().anchoredPosition);
-
-            if (distance < minSpawnGap)
+            // --- КРИТИЧЕСКИ ВАЖНО: Сразу регистрируем данные в глобальном списке ---
+            if (FlightDataManager.Instance != null && !FlightDataManager.Instance.savedFlights.Contains(data))
             {
-                return false; 
+                FlightDataManager.Instance.savedFlights.Add(data);
+            }
+
+            if (RadarManager.Instance != null)
+            {
+                RadarManager.Instance.RegisterAirplane(planeScript);
             }
         }
+    }
 
-        return true; 
+    void SpawnRandomAirplane(Transform contentParent)
+    {
+        float angle = Random.Range(0f, 360f) * Mathf.Deg2Rad;
+        Vector2 startPos = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * spawnRadius;
+
+        Vector2 targetPos = Vector2.zero;
+        if (Random.value >= landingProbability)
+        {
+            float endAngle = angle + Random.Range(120f, 240f) * Mathf.Deg2Rad;
+            targetPos = new Vector2(Mathf.Cos(endAngle), Mathf.Sin(endAngle)) * (spawnRadius + 200f);
+        }
+
+        GameObject newPlane = Instantiate(airplanePrefab, contentParent, false);
+        UIAirplane planeScript = newPlane.GetComponent<UIAirplane>();
+
+        if (planeScript != null)
+        {
+            planeScript.SetFlightPath(startPos, targetPos);
+            if (RadarManager.Instance != null)
+            {
+                RadarManager.Instance.RegisterAirplane(planeScript);
+            }
+        }
+    }
+
+    Transform GetActiveRadarContent()
+    {
+        if (radarContent != null && radarContent.gameObject.activeInHierarchy)
+            return radarContent;
+
+        BigRadarLoader loader = FindFirstObjectByType<BigRadarLoader>();
+        if (loader != null && loader.radarContent != null)
+            return loader.radarContent;
+
+        return null;
+    }
+
+    int GetCurrentPlanesCount(Transform contentParent)
+    {
+        if (RadarManager.Instance != null) return RadarManager.Instance.GetPlanesCount();
+        return contentParent.GetComponentsInChildren<UIAirplane>().Length;
     }
 }
